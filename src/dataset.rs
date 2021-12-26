@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use rand::prelude::*;
+
 #[derive(Debug, Deserialize)]
 struct Fish {
     // ISSCAAP: String,
@@ -20,16 +22,29 @@ struct Fish {
     // Stats_data : String,
 }
 
-pub fn read(
-    file: &std::fs::File,
-) -> std::result::Result<std::vec::Vec<std::string::String>, csv::Error> {
-    let mut fishes = Vec::new();
+pub struct FishDataset {
+    fish_names: Vec<String>,
+}
 
-    for fish in csv::Reader::from_reader(file).deserialize::<Fish>() {
-        if let Some(name) = fish?.english_name {
-            fishes.push(name)
+impl FishDataset {
+    pub fn from_file(file: &std::fs::File) -> std::result::Result<Self, csv::Error> {
+        let mut random_fishes = Vec::new();
+
+        for fish in csv::Reader::from_reader(file).deserialize::<Fish>() {
+            if let Some(name) = fish?.english_name {
+                random_fishes.push(name)
+            }
         }
-    }
 
-    Ok(fishes)
+        let mut rng = rand::thread_rng();
+
+        random_fishes.shuffle(&mut rng);
+
+        Ok(FishDataset {
+            fish_names: random_fishes,
+        })
+    }
+    pub fn random_fish(&mut self) -> Option<String> {
+        self.fish_names.pop()
+    }
 }
