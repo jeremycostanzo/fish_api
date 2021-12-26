@@ -29,10 +29,13 @@ pub struct FishDataset {
 impl FishDataset {
     pub fn from_file(file: &std::fs::File) -> std::result::Result<Self, csv::Error> {
         let mut random_fishes = Vec::new();
+        let mut seen_fishes = std::collections::HashSet::new();
 
         for fish in csv::Reader::from_reader(file).deserialize::<Fish>() {
             if let Some(name) = fish?.english_name {
-                random_fishes.push(name)
+                if !seen_fishes.insert(name.clone()) {
+                    random_fishes.push(name)
+                }
             }
         }
 
@@ -51,15 +54,8 @@ impl FishDataset {
 
 #[cfg(test)]
 mod tests {
-    const TEST_FILE_NAME: &str = "test_rows.csv";
-    const MAX_ITERATIONS: usize = 50;
+    const TEST_FILE_NAME: &str = "dataset.csv";
     use crate::FishDataset;
-    fn the_file_is_too_long() {
-        panic!(
-            "The test file is too large, it should contain at most {} entries",
-            MAX_ITERATIONS
-        )
-    }
 
     fn create_dataset() -> FishDataset {
         let file = std::fs::File::open(TEST_FILE_NAME)
@@ -69,7 +65,9 @@ mod tests {
     #[test]
     fn read_from_file() {
         let mut dataset = create_dataset();
-        assert_eq!(Some("Blue sucker".to_owned()), dataset.random_fish());
+        if dataset.random_fish().is_none() {
+            panic!("the file should not be empty and there is no fish returned")
+        }
     }
 
     #[test]
@@ -77,22 +75,23 @@ mod tests {
         let mut dataset = create_dataset();
 
         let mut seen_names = std::collections::HashSet::new();
-        for _ in 1..=MAX_ITERATIONS {
+        loop {
             let name = dataset.random_fish();
             if let Some(name) = name {
-                assert!(seen_names.insert(name))
+                if !seen_names.insert(name.clone()) {
+                    panic!("{} already exists in the set", name)
+                }
             } else {
                 return;
             }
         }
-        the_file_is_too_long();
     }
 
     #[test]
     fn empty_english_names_are_ignored() {
         let mut dataset = create_dataset();
 
-        for _ in 1..=MAX_ITERATIONS {
+        loop {
             let name = dataset.random_fish();
             if let Some(name) = name {
                 assert_ne!(name, "")
@@ -100,6 +99,5 @@ mod tests {
                 return;
             }
         }
-        the_file_is_too_long();
     }
 }
