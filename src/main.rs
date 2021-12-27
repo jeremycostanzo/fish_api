@@ -1,31 +1,36 @@
 mod dataset;
 mod images;
 
-use actix_web::{http::StatusCode, web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpServer, Responder};
 use dataset::FishDataset;
+use serde::Serialize;
 use std::sync::Mutex;
 
 struct AppState {
     fish_dataset: Mutex<FishDataset>,
 }
 
-async fn serve_fish(data: web::Data<AppState>) -> HttpResponse {
+#[derive(Serialize)]
+struct FishData {
+    english_name: String,
+    image_url: Option<String>,
+}
+
+async fn serve_fish(data: web::Data<AppState>) -> actix_web::Result<impl Responder> {
     let mut dataset = data.fish_dataset.lock().unwrap();
     println!("remaining fishes: {}", dataset.remaining());
     match dataset.random() {
-        Some(fish) => {
-            let image = images::get_url(&fish).await;
-            let mut return_string = format!("<div>{}</div>", fish);
-            if let Ok(Some(image_url)) = image {
-                return_string.push_str(&format!("\n<img src=\"{}\">", image_url));
+        Some(english_name) => {
+            let image_url = images::get_url(&english_name).await;
+            if let Err(error) = &image_url {
+                eprintln!("Could not download image: {}", error)
             }
-            HttpResponse::build(StatusCode::OK)
-                .content_type("text/html; charset=utf-8")
-                .body(return_string)
+            Ok(web::Json(Some(FishData {
+                english_name,
+                image_url: image_url.ok().flatten(),
+            })))
         }
-        None => HttpResponse::build(StatusCode::OK)
-            .content_type("text/html; charset=utf-8")
-            .body("No more fishes".to_owned()),
+        None => Ok(web::Json(None)),
     }
 }
 
