@@ -33,7 +33,7 @@ impl FishDataset {
 
         for fish in csv::Reader::from_reader(file).deserialize::<Fish>() {
             if let Some(name) = fish?.english_name {
-                if !seen_fishes.insert(name.clone()) {
+                if seen_fishes.insert(name.clone()) {
                     random_fishes.push(name)
                 }
             }
@@ -47,8 +47,12 @@ impl FishDataset {
             fish_names: random_fishes,
         })
     }
-    pub fn random_fish(&mut self) -> Option<String> {
+    pub fn random(&mut self) -> Option<String> {
         self.fish_names.pop()
+    }
+
+    pub fn remaining(&self) -> usize {
+        self.fish_names.len()
     }
 }
 
@@ -65,7 +69,7 @@ mod tests {
     #[test]
     fn read_from_file() {
         let mut dataset = create_dataset();
-        if dataset.random_fish().is_none() {
+        if dataset.random().is_none() {
             panic!("the file should not be empty and there is no fish returned")
         }
     }
@@ -76,7 +80,7 @@ mod tests {
 
         let mut seen_names = std::collections::HashSet::new();
         loop {
-            let name = dataset.random_fish();
+            let name = dataset.random();
             if let Some(name) = name {
                 if !seen_names.insert(name.clone()) {
                     panic!("{} already exists in the set", name)
@@ -92,7 +96,7 @@ mod tests {
         let mut dataset = create_dataset();
 
         loop {
-            let name = dataset.random_fish();
+            let name = dataset.random();
             if let Some(name) = name {
                 assert_ne!(name, "")
             } else {

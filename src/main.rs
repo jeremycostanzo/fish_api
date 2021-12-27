@@ -1,4 +1,5 @@
 mod dataset;
+mod images;
 
 use actix_web::{web, App, HttpServer};
 use dataset::FishDataset;
@@ -10,8 +11,17 @@ struct AppState {
 
 async fn serve_fish(data: web::Data<AppState>) -> String {
     let mut dataset = data.fish_dataset.lock().unwrap();
-    match dataset.random_fish() {
-        Some(fish) => fish,
+    println!("{}", dataset.remaining());
+    match dataset.random() {
+        Some(fish) => {
+            let image = images::get_url(&fish).await;
+            println!("{:?}", image);
+            let mut return_string = format!("name: {}", fish);
+            if let Ok(Some(image_url)) = image {
+                return_string.push_str(&format!("\nimage_url: {}", image_url));
+            }
+            return_string
+        }
         None => "No more fishes".to_owned(),
     }
 }
