@@ -26,13 +26,10 @@ pub async fn get_url(english_name: &str) -> Result<Option<String>, reqwest::Erro
 
     let link = fragment
         .select(&url_selector)
-        .find_map(|element| dbg!(element.value().attr("href")))
+        .find_map(|element| element.value().attr("href"))
         .map(|link| format!("{}{}{}", BASE_URL, "/ComNames/", link));
 
-    println!("link: {:?}", link);
-
     if let Some(link) = link {
-        println!("got first link");
         let res = reqwest::Client::new().get(link).send().await?;
         let text = res.text().await?;
         let html = Html::parse_document(&text);
@@ -42,7 +39,6 @@ pub async fn get_url(english_name: &str) -> Result<Option<String>, reqwest::Erro
             .select(&image_selector)
             .find_map(|element| element.value().attr("src"))
             .map(|link| format!("{}{}", BASE_URL, link));
-        // println!("{}", text);
         Ok(image_link)
     } else {
         Ok(None)

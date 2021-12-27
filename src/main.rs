@@ -1,7 +1,7 @@
 mod dataset;
 mod images;
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{http::StatusCode, web, App, HttpResponse, HttpServer};
 use dataset::FishDataset;
 use std::sync::Mutex;
 
@@ -9,20 +9,23 @@ struct AppState {
     fish_dataset: Mutex<FishDataset>,
 }
 
-async fn serve_fish(data: web::Data<AppState>) -> String {
+async fn serve_fish(data: web::Data<AppState>) -> HttpResponse {
     let mut dataset = data.fish_dataset.lock().unwrap();
-    println!("{}", dataset.remaining());
+    println!("remaining fishes: {}", dataset.remaining());
     match dataset.random() {
         Some(fish) => {
             let image = images::get_url(&fish).await;
-            println!("{:?}", image);
-            let mut return_string = format!("name: {}", fish);
+            let mut return_string = format!("<div>{}</div>", fish);
             if let Ok(Some(image_url)) = image {
-                return_string.push_str(&format!("\nimage_url: {}", image_url));
+                return_string.push_str(&format!("\n<img src=\"{}\">", image_url));
             }
-            return_string
+            HttpResponse::build(StatusCode::OK)
+                .content_type("text/html; charset=utf-8")
+                .body(return_string)
         }
-        None => "No more fishes".to_owned(),
+        None => HttpResponse::build(StatusCode::OK)
+            .content_type("text/html; charset=utf-8")
+            .body("No more fishes".to_owned()),
     }
 }
 
