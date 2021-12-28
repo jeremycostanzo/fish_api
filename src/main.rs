@@ -4,7 +4,7 @@ mod images;
 use actix_web::{web, App, HttpServer, Responder};
 use dataset::FishDataset;
 use serde::Serialize;
-use std::sync::Mutex;
+use std::{fs::OpenOptions, sync::Mutex, time::Instant};
 
 struct AppState {
     fish_dataset: Mutex<FishDataset>,
@@ -40,7 +40,9 @@ const DATASET_FILE_NAME: &str = "dataset.csv";
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let file = std::fs::OpenOptions::new()
+    let start_time = Instant::now();
+
+    let file = OpenOptions::new()
         .read(true)
         .write(true)
         .open(DATASET_FILE_NAME)
@@ -49,6 +51,8 @@ async fn main() -> std::io::Result<()> {
     let random_fishes = web::Data::new(AppState {
         fish_dataset: Mutex::new(FishDataset::from_file(file)?),
     });
+
+    println!("Fishes read in {}ms", start_time.elapsed().as_millis());
 
     HttpServer::new(move || {
         // move counter into the closure

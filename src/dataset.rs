@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::io::{Seek, SeekFrom};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{Seek, SeekFrom},
+};
 
 use rand::prelude::*;
 
@@ -34,13 +38,13 @@ pub struct Fish {
 
 pub struct FishDataset {
     fish_names: Vec<Fish>,
-    data_file: std::fs::File,
+    data_file: File,
 }
 
 impl FishDataset {
-    pub fn from_file(file: std::fs::File) -> std::result::Result<Self, csv::Error> {
+    pub fn from_file(file: File) -> Result<Self, csv::Error> {
         let mut random_fishes = Vec::new();
-        let mut seen_fishes = std::collections::HashSet::new();
+        let mut seen_fishes = HashSet::new();
 
         for fish in csv::Reader::from_reader(&file).deserialize::<CsvFish>() {
             let fish = fish?;
@@ -69,8 +73,8 @@ impl FishDataset {
         self.data_file
             .set_len(0)
             .expect("File not open for writing");
-        let new_position = &self.data_file.seek(SeekFrom::Start(0)).unwrap();
-        println!("new cursor position: {}", new_position);
+        self.data_file.seek(SeekFrom::Start(0)).unwrap();
+
         let mut writer = csv::Writer::from_writer(&self.data_file);
 
         for row in self.fish_names.iter() {
@@ -89,11 +93,13 @@ impl FishDataset {
 
 #[cfg(test)]
 mod tests {
-    const TEST_FILE_NAME: &str = "dataset.csv";
     use crate::FishDataset;
+    use std::{collections::HashSet, fs::File};
+
+    const TEST_FILE_NAME: &str = "dataset.csv";
 
     fn create_dataset() -> FishDataset {
-        let file = std::fs::File::open(TEST_FILE_NAME)
+        let file = File::open(TEST_FILE_NAME)
             .unwrap_or_else(|_| panic!("could not find {}", TEST_FILE_NAME));
         FishDataset::from_file(file).expect("incorrect csv format")
     }
@@ -109,7 +115,7 @@ mod tests {
     fn fishes_appear_only_once() {
         let mut dataset = create_dataset();
 
-        let mut seen_names = std::collections::HashSet::new();
+        let mut seen_names = HashSet::new();
         loop {
             let fish = dataset.random();
             if let Some(fish) = fish {
