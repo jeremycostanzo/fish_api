@@ -1,13 +1,15 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::io::{Seek, SeekFrom};
 
 use rand::prelude::*;
 
 #[derive(Debug, Deserialize)]
-struct Fish {
+struct CsvFish {
     // ISSCAAP: String,
     // TAXOCODE: String,
     // 3A_CODE: String,
-    // Scientific_name: String,
+    #[serde(rename = "Scientific_name")]
+    scientific_name: Option<String>,
     // Fishes can have a scientific name but no english name for instance, we want to skip them
     #[serde(rename = "English_name")]
     english_name: Option<String>,
@@ -22,19 +24,32 @@ struct Fish {
     // Stats_data : String,
 }
 
+#[derive(Serialize)]
+pub struct Fish {
+    #[serde(rename = "Scientific_name")]
+    scientific_name: Option<String>,
+    #[serde(rename = "English_name")]
+    pub english_name: String,
+}
+
 pub struct FishDataset {
-    fish_names: Vec<String>,
+    fish_names: Vec<Fish>,
+    data_file: std::fs::File,
 }
 
 impl FishDataset {
-    pub fn from_file(file: &std::fs::File) -> std::result::Result<Self, csv::Error> {
+    pub fn from_file(file: std::fs::File) -> std::result::Result<Self, csv::Error> {
         let mut random_fishes = Vec::new();
         let mut seen_fishes = std::collections::HashSet::new();
 
-        for fish in csv::Reader::from_reader(file).deserialize::<Fish>() {
-            if let Some(name) = fish?.english_name {
+        for fish in csv::Reader::from_reader(&file).deserialize::<CsvFish>() {
+            let fish = fish?;
+            if let Some(name) = fish.english_name {
                 if seen_fishes.insert(name.clone()) {
-                    random_fishes.push(name)
+                    random_fishes.push(Fish {
+                        english_name: name,
+                        scientific_name: fish.scientific_name,
+                    })
                 }
             }
         }
@@ -45,9 +60,25 @@ impl FishDataset {
 
         Ok(FishDataset {
             fish_names: random_fishes,
+            data_file: file,
         })
     }
-    pub fn random(&mut self) -> Option<String> {
+
+    pub fn overwrite(&mut self) {
+        // We want to clear the file's contents before writing into it
+        self.data_file
+            .set_len(0)
+            .expect("File not open for writing");
+        let new_position = &self.data_file.seek(SeekFrom::Start(0)).unwrap();
+        println!("new cursor position: {}", new_position);
+        let mut writer = csv::Writer::from_writer(&self.data_file);
+
+        for row in self.fish_names.iter() {
+            writer.serialize(row).expect("Csv serialization failure")
+        }
+    }
+
+    pub fn random(&mut self) -> Option<Fish> {
         self.fish_names.pop()
     }
 
@@ -64,7 +95,7 @@ mod tests {
     fn create_dataset() -> FishDataset {
         let file = std::fs::File::open(TEST_FILE_NAME)
             .unwrap_or_else(|_| panic!("could not find {}", TEST_FILE_NAME));
-        FishDataset::from_file(&file).expect("incorrect csv format")
+        FishDataset::from_file(file).expect("incorrect csv format")
     }
     #[test]
     fn read_from_file() {
@@ -80,10 +111,10 @@ mod tests {
 
         let mut seen_names = std::collections::HashSet::new();
         loop {
-            let name = dataset.random();
-            if let Some(name) = name {
-                if !seen_names.insert(name.clone()) {
-                    panic!("{} already exists in the set", name)
+            let fish = dataset.random();
+            if let Some(fish) = fish {
+                if !seen_names.insert(fish.english_name.clone()) {
+                    panic!("{} already exists in the set", fish.english_name)
                 }
             } else {
                 return;
@@ -96,9 +127,9 @@ mod tests {
         let mut dataset = create_dataset();
 
         loop {
-            let name = dataset.random();
-            if let Some(name) = name {
-                assert_ne!(name, "")
+            let fish = dataset.random();
+            if let Some(fish) = fish {
+                assert_ne!(fish.english_name, "")
             } else {
                 return;
             }

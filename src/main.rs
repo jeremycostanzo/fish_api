@@ -17,29 +17,37 @@ struct FishData {
 }
 
 async fn serve_fish(data: web::Data<AppState>) -> actix_web::Result<impl Responder> {
-    let mut dataset = data.fish_dataset.lock().unwrap();
+    let mut dataset = data.fish_dataset.lock().expect("Could not lock dataset");
     println!("remaining fishes: {}", dataset.remaining());
-    match dataset.random() {
-        Some(english_name) => {
-            let image_url = images::get_url(&english_name).await;
+    let json = match dataset.random() {
+        Some(fish) => {
+            let image_url = images::get_url(&fish.english_name).await;
             if let Err(error) = &image_url {
                 eprintln!("Could not download image: {}", error)
             }
             Ok(web::Json(Some(FishData {
-                english_name,
+                english_name: fish.english_name,
                 image_url: image_url.ok().flatten(),
             })))
         }
         None => Ok(web::Json(None)),
-    }
+    };
+    dataset.overwrite();
+    json
 }
+
+const DATASET_FILE_NAME: &str = "dataset.csv";
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let file = std::fs::File::open("dataset.csv")?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(DATASET_FILE_NAME)
+        .unwrap_or_else(|_| panic!("Could not open file {}", DATASET_FILE_NAME));
 
     let random_fishes = web::Data::new(AppState {
-        fish_dataset: Mutex::new(FishDataset::from_file(&file)?),
+        fish_dataset: Mutex::new(FishDataset::from_file(file)?),
     });
 
     HttpServer::new(move || {
